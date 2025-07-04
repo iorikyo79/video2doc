@@ -1,0 +1,36 @@
+# Video2Doc Agent Dependencies
+
+# Core smolagents framework
+smolagents>=0.3.0
+
+# Language models and APIs
+litellm>=1.0.0
+
+# Audio/Video processing
+ffmpeg-python>=0.2.0
+
+# AI/ML models for audio processing
+transformers>=4.40.0  # Hugging Face transformers for Whisper
+torch>=2.0.0  # PyTorch for model execution
+torchaudio>=2.0.0  # Audio processing with PyTorch
+
+# Document processing - Unified conversion
+markitdown[all]>=0.1.0  # Microsoft's unified document converter (includes PDF, DOCX, PPTX, etc.)
+
+# Document processing - Legacy (kept for fallback, consider removing after testing)
+# PyMuPDF>=1.23.0  # for PDF processing - replaced by markitdown
+# python-pptx>=0.6.0  # for PowerPoint - replaced by markitdown  
+# python-docx>=0.8.0  # for Word documents - replaced by markitdown
+markdownify>=0.11.0  # HTML to Markdown conversion - may still be needed
+
+# Image processing and OCR
+Pillow>=10.0.0
+# pytesseract>=0.3.10  # OCR - may be replaced by markitdown + LLM for better accuracy
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Utilities
+# pathlib2>=2.3.0  # Not needed for Python 3.4+, use built-in pathlib
+requests>=2.31.0
