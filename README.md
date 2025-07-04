@@ -4,36 +4,52 @@ smolagents를 기반으로 한 동영상 및 참조 자료 문서화 에이전�
 
 ## 📖 개요
 
-Video2Doc Agent는 교육 동영상과 관련 참조 자료를 자동으로 분석하여 구조화된 문서를 생성하는 AI 에이전트 시스템입니다. Hugging Face의 smolagents 프레임워크를 사용하여 구축되었습니다.
+Video2Doc Agent는 다양한 프레젠테이션 동영상과 관련 참조 자료를 자동으로 분석하여 구조화된 문서를 생성하는 AI 에이전트 시스템입니다. Hugging Face의 smolagents 프레임워크를 사용하여 구축되었습니다.
 
 ## 🌟 주요 기능
 
 - **🎬 동영상 처리**: MP4, AVI, MOV, MKV 형식 지원
+- **📸 스크린샷 추출**: 동영상에서 25초 간격 키프레임 자동 추출 (NEW)
+  - 중앙 영역 기반 장면 변화 감지
+  - 이미지 해싱 기반 중복 제거
+  - 타임스탬프 동기화
 - **🎵 오디오 처리**: MP3 파일 직접 처리 지원 (회의록 등에 유용)
 - **🎵 오디오 추출**: FFmpeg를 사용한 고품질 오디오 추출
 - **🗣️ 음성 인식**: Whisper large-v3 모델을 사용한 정확한 음성-텍스트 변환
+- **🔍 고급 이미지 분석**: qwen2.5vl 모델을 사용한 멀티모달 이미지 해석 (NEW)
+  - 프레젠테이션 슬라이드 텍스트 및 구조 분석
+  - 다이어그램, 차트, 표 해석
+  - 소프트웨어 UI 및 스크린샷 인식
+  - 범용 콘텐츠 분석 (교육, 비즈니스, 제품소개, 논문발표 등)
 - **📄 문서 변환**: PDF, PPTX, DOCX, 이미지 파일을 마크다운으로 변환
 - **🖼️ OCR 처리**: 이미지에서 텍스트 추출
-- **🤖 AI 문서 생성**: 컨텍스트를 기반으로 한 지능적인 보고서 생성
+- **🔗 멀티모달 통합**: 텍스트 + 이미지 + 문서의 유사도 기반 컨텍스트 통합 (NEW)
+  - 25초 간격 키프레임과 음성 스크립트 시간 동기화
+  - 임베딩 기반 이미지-텍스트 매칭
+  - 단순하고 효율적인 중복 제거
+- **🤖 AI 문서 생성**: 이미지가 포함된 완전한 멀티모달 보고서 생성 (NEW)
 - **⚙️ 유연한 설정**: 다양한 모델과 출력 형식 지원
 
 ## 🛠️ 시스템 워크플로우
 
 ```mermaid
 graph TD
-    A[오디오 파일 입력] --> B{파일 타입 확인}
+    A[동영상 파일 입력] --> B{파일 타입 확인}
     B -->|MP4| C[MP3 추출]
-    B -->|MP3| D[스크립트 추출]
-    C --> D[스크립트 추출]
-    D --> E[스크립트 생성]
+    B -->|MP4| D[키프레임 추출 25초간격]
+    B -->|MP3| E[스크립트 추출]
+    C --> E[스크립트 추출]
+    D --> F[이미지 분석 qwen2.5vl]
     
-    F[참조 파일들] --> G[문서 변환]
-    G --> H[마크다운 변환]
+    G[참조 파일들] --> H[문서 변환]
+    H --> I[마크다운 변환]
     
-    E --> I[컨텍스트 통합]
-    H --> I
-    I --> J[AI 보고서 생성]
-    J --> K[최종 문서 출력]
+    E --> J[멀티모달 컨텍스트 통합]
+    F --> J
+    I --> J
+    J --> K[유사도 기반 이미지 매칭]
+    K --> L[이미지 포함 보고서 생성]
+    L --> M[최종 문서 출력]
 ```
 
 ## 📋 요구사항
@@ -93,6 +109,7 @@ brew install ffmpeg tesseract tesseract-lang
 # Ollama 설치 및 모델 다운로드
 curl -fsSL https://ollama.ai/install.sh | sh
 ollama pull qwen3:custom
+ollama pull qwen2.5vl:latest  # 이미지 분석용
 ```
 
 ## 💻 사용법
@@ -249,11 +266,16 @@ pptx_md = workflow.convert_reference_file_to_md("input/slides.pptx")
 
 ```
 output/
-├── 02_audio_name.mp3              # 추출된 오디오 (MP4인 경우만)
-├── 03_audio_name_script.md        # 음성인식 스크립트
-├── 04_reference_ref.md            # 변환된 참조 문서
-├── 05_audio_name_full_context.md  # 통합 컨텍스트
-└── 06_audio_name_summary_mid.md   # 최종 보고서
+├── 01_keyframes/              # 추출된 키프레임들 (25초 간격)
+│   ├── frame_0025s.jpg       # 25초 지점
+│   ├── frame_0050s.jpg       # 50초 지점
+│   └── frame_0075s.jpg       # 75초 지점
+├── 02_audio_name.mp3         # 추출된 오디오 (MP4인 경우만)
+├── 03_audio_name_script.md   # 음성인식 스크립트
+├── 04_image_analysis.md      # qwen2.5vl 이미지 분석 결과
+├── 05_reference_ref.md       # 변환된 참조 문서
+├── 06_audio_name_full_context.md  # 멀티모달 통합 컨텍스트
+└── 07_audio_name_summary_mid.md   # 최종 보고서 (이미지 포함)
 ```
 
 ## 🔧 개발자 가이드
@@ -395,7 +417,7 @@ WHISPER_MODEL = "medium"  # 또는 "small"
 
 ---
 
-**Video2Doc Agent** - 교육 컨텐츠의 자동 문서화를 통해 학습 효율성을 높입니다. 🚀
+**Video2Doc Agent** - 다양한 프레젠테이션 콘텐츠의 자동 문서화를 통해 업무 효율성을 높입니다. 🚀
 
 ## 🧪 전체 워크플로우 테스트
 
