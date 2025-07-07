@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from video2doc_agent import Video2DocAgent, is_youtube_url
+from video2doc_agent import Video2DocAgent, is_youtube_url, Video2DocError, InvalidInputError
 from config import config
 
 
@@ -44,10 +44,27 @@ def validate_input(input_path: str, reference_files: Optional[List[str]] = None)
     else:
         # 로컬 파일 검사
         if not Path(input_path).exists():
-            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {input_path}")
+            raise InvalidInputError(
+                message=f"파일을 찾을 수 없습니다: {input_path}",
+                error_code="FILE_NOT_FOUND",
+                suggestions=[
+                    "파일 경로가 정확한지 확인해주세요",
+                    "파일이 존재하는지 확인해주세요",
+                    "절대 경로를 사용해보세요",
+                    "파일명에 특수문자가 없는지 확인해주세요"
+                ]
+            )
         
         if not config.is_supported_file(input_path):
-            raise ValueError(f"지원하지 않는 파일 형식: {input_path}")
+            raise InvalidInputError(
+                message=f"지원하지 않는 파일 형식입니다: {input_path}",
+                error_code="UNSUPPORTED_FILE_FORMAT",
+                suggestions=[
+                    f"지원되는 형식: 오디오({', '.join(config.SUPPORTED_AUDIO_FORMATS)}), 문서({', '.join(config.SUPPORTED_DOC_FORMATS)}), 이미지({', '.join(config.SUPPORTED_IMAGE_FORMATS)})",
+                    "파일을 지원되는 형식으로 변환해주세요",
+                    "다른 파일을 사용해보세요"
+                ]
+            )
         
         print(f"📁 로컬 파일 확인: {Path(input_path).name}")
         input_validated = input_path
@@ -203,8 +220,23 @@ def main():
     except KeyboardInterrupt:
         logger.info("❌ 사용자에 의해 중단되었습니다.")
         sys.exit(1)
+    
+    except Video2DocError as e:
+        print("\n" + e.get_user_friendly_message())
+        logger.error(f"Video2Doc 오류: {e.message}")
+        if args.verbose:
+            logger.exception("상세 오류 정보:")
+        sys.exit(1)
         
     except Exception as e:
+        error_msg = f"예상치 못한 오류가 발생했습니다: {e}"
+        print(f"\n❌ 오류: {error_msg}")
+        print("\n💡 해결 방법:")
+        print("  1. 입력 파일들을 다시 확인해주세요")
+        print("  2. 시스템 로그를 확인해주세요")
+        print("  3. 다른 파일로 시도해보세요")
+        print("  4. --verbose 옵션을 사용해 상세 정보를 확인해주세요")
+        
         logger.error(f"❌ 처리 중 오류 발생: {e}")
         if args.verbose:
             logger.exception("상세 오류 정보:")
