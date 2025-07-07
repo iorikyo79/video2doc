@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import List
 
-from smolagents import tool, LiteLLMModel
+from smolagents import tool, LiteLLMModel, ChatMessage, MessageRole
 from core.workflow import Video2DocWorkflow
 from config import config
 
@@ -184,17 +184,19 @@ def report_generation_tool(context_file: str, report_type: str = "summary", leng
 - 보고서 유형: {report_type}
 - 보고서 길이: {length}
 - 마크다운 형식으로 작성
-- 실제 내용을 바탕으로 구체적이고 실용적인 보고서 작성"""
+- 실제 내용을 바탕으로 구체적이고 실용적인 보고서를 작성
+- 모든 내용은 한글로 작성하고 키워드는 영어 사용 허용"""
+
 
         # 모델에 메시지 전송
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            ChatMessage(role=MessageRole.SYSTEM, content=[{"type": "text", "text": system_prompt}]),
+            ChatMessage(role=MessageRole.USER, content=[{"type": "text", "text": user_prompt}])
         ]
         
         response = model(messages)
-        report_content = response
-        
+        report_content = response.content if hasattr(response, 'content') else str(response)
+
         # 보고서 파일 저장
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(report_content)
