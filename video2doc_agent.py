@@ -16,6 +16,8 @@ Video2Doc Agent System using smolagents
 
 import os
 import logging
+import re
+import urllib.parse
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import subprocess
@@ -33,6 +35,7 @@ from PIL import Image
 import pandas as pd
 # Legacy document processing imports (kept for fallback)
 from pptx import Presentation  # Legacy - replaced by markitdown
+import yt_dlp  # YouTube video download
 from config import config
 
 
@@ -42,6 +45,104 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# 유튜브 관련 유틸리티 함수들
+def is_youtube_url(url: str) -> bool:
+    """
+    URL이 유튜브 링크인지 확인합니다.
+    
+    Args:
+        url: 확인할 URL 문자열
+        
+    Returns:
+        유튜브 URL 여부
+    """
+    if not isinstance(url, str):
+        return False
+    
+    # 유튜브 URL 패턴 매칭
+    youtube_patterns = [
+        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+',
+        r'(?:https?://)?youtu\.be/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/v/[\w-]+',
+        r'(?:https?://)?(?:m\.)?youtube\.com/watch\?v=[\w-]+',
+    ]
+    
+    for pattern in youtube_patterns:
+        if re.match(pattern, url.strip()):
+            return True
+    
+    return False
+
+
+def extract_video_id_from_url(url: str) -> str:
+    """
+    유튜브 URL에서 비디오 ID를 추출합니다.
+    
+    Args:
+        url: 유튜브 URL
+        
+    Returns:
+        비디오 ID (11자리 문자열)
+        
+    Raises:
+        ValueError: 유효하지 않은 유튜브 URL인 경우
+    """
+    if not is_youtube_url(url):
+        raise ValueError(f"유효하지 않은 유튜브 URL: {url}")
+    
+    # 다양한 유튜브 URL 형식에서 비디오 ID 추출
+    patterns = [
+        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/)([a-zA-Z0-9_-]{11})',
+        r'youtube\.com/watch\?.*v=([a-zA-Z0-9_-]{11})',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            video_id = match.group(1)
+            # 유튜브 비디오 ID는 정확히 11자리여야 함
+            if len(video_id) == 11:
+                return video_id
+    
+    raise ValueError(f"유튜브 URL에서 비디오 ID를 추출할 수 없습니다: {url}")
+
+
+def _sanitize_filename(filename: str) -> str:
+    """
+    파일명에서 특수문자를 제거하여 파일시스템에서 안전하게 사용할 수 있도록 합니다.
+    
+    Args:
+        filename: 원본 파일명
+        
+    Returns:
+        정리된 파일명
+    """
+    if not filename:
+        return "untitled"
+    
+    # 위험한 문자들을 안전한 문자로 교체
+    dangerous_chars = r'[<>:"/\\|?*]'
+    filename = re.sub(dangerous_chars, '_', filename)
+    
+    # 연속된 공백을 하나로 교체
+    filename = re.sub(r'\s+', ' ', filename)
+    
+    # 앞뒤 공백 및 점 제거
+    filename = filename.strip(' .')
+    
+    # 너무 긴 파일명 자르기 (Windows 파일명 제한 고려)
+    max_length = 200
+    if len(filename) > max_length:
+        filename = filename[:max_length].rsplit(' ', 1)[0]  # 단어 단위로 자르기
+    
+    # 빈 문자열인 경우 기본값 사용
+    if not filename:
+        return "untitled"
+    
+    return filename
 
 
 class Video2DocWorkflow:
@@ -362,9 +463,135 @@ class Video2DocWorkflow:
         except Exception as e:
             logger.error(f"텍스트 파일 변환 실패: {e}")
             raise
-
-
+    
+    def download_youtube_video(self, youtube_url: str) -> str:
+        """
+        유튜브 비디오를 다운로드하여 로컬 MP4 파일로 저장합니다.
+        
+        Args:
+            youtube_url: 유튜브 비디오 URL
+            
+        Returns:
+            다운로드된 MP4 파일 경로
+        """
+        if not is_youtube_url(youtube_url):
+            raise ValueError(f"유효하지 않은 유튜브 URL: {youtube_url}")
+        
+        try:
+            # 비디오 정보 먼저 추출
+            video_info = self._get_youtube_video_info(youtube_url)
+            video_id = extract_video_id_from_url(youtube_url)
+            
+            # 다운로드 디렉토리 생성
+            download_dir = self.output_dir / "downloads"
+            download_dir.mkdir(exist_ok=True)
+            
+            # 안전한 파일명 생성
+            safe_title = _sanitize_filename(video_info.get('title', f'video_{video_id}'))
+            output_filename = f"01_youtube_{video_id}_{safe_title}.%(ext)s"
+            output_path = download_dir / output_filename
+            
+            # yt-dlp 설정
+            ydl_opts = {
+                'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',  # 720p 이하 MP4 우선
+                'outtmpl': str(output_path),
+                'max_filesize': 500 * 1024 * 1024,  # 500MB 제한
+                'no_warnings': False,
+                'quiet': False,
+                'extract_flat': False,
+                'writeinfojson': False,  # JSON 메타데이터는 별도로 저장하지 않음
+            }
+            
+            logger.info(f"유튜브 비디오 다운로드 시작: {video_info.get('title', 'Unknown')}")
+            logger.info(f"비디오 ID: {video_id}")
+            logger.info(f"다운로드 경로: {download_dir}")
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([youtube_url])
+            
+            # 다운로드된 파일 찾기 (확장자가 실제로 결정된 후)
+            downloaded_files = list(download_dir.glob(f"01_youtube_{video_id}_{safe_title}.*"))
+            
+            if not downloaded_files:
+                raise RuntimeError("다운로드된 파일을 찾을 수 없습니다")
+            
+            # MP4 파일 우선 선택
+            mp4_files = [f for f in downloaded_files if f.suffix.lower() == '.mp4']
+            final_file = mp4_files[0] if mp4_files else downloaded_files[0]
+            
+            logger.info(f"유튜브 비디오 다운로드 완료: {final_file}")
+            logger.info(f"파일 크기: {final_file.stat().st_size / 1024 / 1024:.2f} MB")
+            
+            return str(final_file)
+            
+        except Exception as e:
+            logger.error(f"유튜브 비디오 다운로드 실패: {e}")
+            raise
+    
+    def _get_youtube_video_info(self, youtube_url: str) -> dict:
+        """
+        유튜브 비디오의 메타데이터 정보를 추출합니다.
+        
+        Args:
+            youtube_url: 유튜브 비디오 URL
+            
+        Returns:
+            비디오 정보 딕셔너리 (title, duration, description 등)
+        """
+        try:
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+                
+                # 필요한 정보만 추출
+                video_info = {
+                    'title': info.get('title', 'Unknown'),
+                    'duration': info.get('duration', 0),
+                    'description': info.get('description', ''),
+                    'uploader': info.get('uploader', 'Unknown'),
+                    'upload_date': info.get('upload_date', ''),
+                    'view_count': info.get('view_count', 0),
+                    'webpage_url': info.get('webpage_url', youtube_url),
+                }
+                
+                logger.info(f"비디오 정보 추출 완료: {video_info['title']}")
+                return video_info
+                
+        except Exception as e:
+            logger.warning(f"비디오 정보 추출 실패: {e}")
+            # 실패 시 기본 정보 반환
+            video_id = extract_video_id_from_url(youtube_url)
+            return {
+                'title': f'video_{video_id}',
+                'duration': 0,
+                'description': '',
+                'uploader': 'Unknown',
+                'upload_date': '',
+                'view_count': 0,
+                'webpage_url': youtube_url,
+            }
+    
 # smolagents 도구 정의
+@tool
+def youtube_download_tool(youtube_url: str) -> str:
+    """
+    유튜브 비디오를 다운로드하고 MP4 파일 경로를 반환합니다.
+    
+    Args:
+        youtube_url: 유튜브 비디오 URL
+    
+    Returns:
+        다운로드된 MP4 파일 경로
+    """
+    workflow = Video2DocWorkflow()
+    return workflow.download_youtube_video(youtube_url)
+
+
 @tool
 def mp3_extraction_tool(mp4_path: str) -> str:
     """
@@ -702,6 +929,7 @@ class Video2DocAgent:
         agent_config = config.AGENT_CONFIG.copy()
         self.agent = CodeAgent(
             tools=[
+                youtube_download_tool,
                 mp3_extraction_tool,
                 script_extraction_tool, 
                 file_conversion_tool,
@@ -716,22 +944,28 @@ class Video2DocAgent:
         
         logger.info("Video2Doc 에이전트 초기화 완료")
     
-    def _get_audio_file_type(self, audio_path: str) -> str:
+    def _get_input_type(self, input_path: str) -> str:
         """
-        오디오 파일의 타입을 확인합니다.
+        입력이 로컬 파일인지 유튜브 URL인지 확인합니다.
         
         Args:
-            audio_path: 오디오 파일 경로
+            input_path: 입력 경로 또는 URL
             
         Returns:
-            파일 타입 ("mp4", "mp3", "unsupported")
+            입력 타입 ("mp4", "mp3", "youtube", "unsupported")
         """
-        audio_file = Path(audio_path)
+        # 유튜브 URL인지 먼저 확인
+        if is_youtube_url(input_path):
+            return "youtube"
         
-        if not audio_file.exists():
-            raise FileNotFoundError(f"오디오 파일을 찾을 수 없습니다: {audio_path}")
+        # 로컬 파일인지 확인
+        input_file = Path(input_path)
         
-        suffix = audio_file.suffix.lower()
+        if not input_file.exists():
+            # 파일이 존재하지 않고 URL도 아닌 경우
+            return "unsupported"
+        
+        suffix = input_file.suffix.lower()
         
         if suffix == ".mp4":
             return "mp4"
@@ -740,9 +974,37 @@ class Video2DocAgent:
         else:
             return "unsupported"
     
+    def _get_audio_file_type(self, audio_path: str) -> str:
+        """
+        [DEPRECATED] 기존 호환성을 위한 래퍼 메서드
+        새 코드에서는 _get_input_type()을 사용하세요.
+        
+        Args:
+            audio_path: 오디오 파일 경로
+            
+        Returns:
+            파일 타입 ("mp4", "mp3", "unsupported")
+        """
+        logger.warning("_get_audio_file_type()는 deprecated입니다. _get_input_type()을 사용하세요.")
+        return self._get_input_type(audio_path)
+    
+    def _is_supported_input(self, input_path: str) -> bool:
+        """
+        지원되는 입력 형식인지 확인합니다 (로컬 파일 + 유튜브 URL).
+        
+        Args:
+            input_path: 입력 경로 또는 URL
+            
+        Returns:
+            지원 여부
+        """
+        input_type = self._get_input_type(input_path)
+        return input_type in ["mp4", "mp3", "youtube"]
+    
     def _is_supported_audio_format(self, audio_path: str) -> bool:
         """
-        지원되는 오디오 형식인지 확인합니다.
+        [DEPRECATED] 기존 호환성을 위한 래퍼 메서드
+        새 코드에서는 _is_supported_input()을 사용하세요.
         
         Args:
             audio_path: 오디오 파일 경로
@@ -750,8 +1012,8 @@ class Video2DocAgent:
         Returns:
             지원 여부
         """
-        file_type = self._get_audio_file_type(audio_path)
-        return file_type in ["mp4", "mp3"]
+        logger.warning("_is_supported_audio_format()는 deprecated입니다. _is_supported_input()을 사용하세요.")
+        return self._is_supported_input(audio_path)
     
     def process_audio_and_references(self, 
                                    audio_path: str, 
@@ -759,10 +1021,10 @@ class Video2DocAgent:
                                    report_type: str = "summary",
                                    length: str = "mid") -> Dict[str, str]:
         """
-        오디오 파일(MP4/MP3)과 참조 파일들을 처리하여 보고서를 생성합니다.
+        오디오 파일(MP4/MP3)이나 유튜브 URL과 참조 파일들을 처리하여 보고서를 생성합니다.
         
         Args:
-            audio_path: 오디오 파일 경로 (MP4 또는 MP3)
+            audio_path: 오디오 파일 경로 (MP4, MP3) 또는 유튜브 URL
             reference_files: 참조 파일 목록 (PPTX, 이미지)
             report_type: 보고서 유형
             length: 보고서 길이
@@ -771,10 +1033,23 @@ class Video2DocAgent:
             처리 결과 딕셔너리 (각 단계별 파일 경로)
         """
         
-        # 오디오 파일 타입 확인
-        audio_file_type = self._get_audio_file_type(audio_path)
+        # 입력 타입 확인 (로컬 파일 또는 유튜브 URL)
+        input_type = self._get_input_type(audio_path)
         
-        if audio_file_type == "mp4":
+        if input_type == "youtube":
+            instruction = f"""
+            다음 단계에 따라 YouTube2Doc 워크플로우를 실행하세요:
+            
+            1. 유튜브 비디오 다운로드: {audio_path}
+            2. 다운로드된 MP4 파일에서 MP3 추출
+            3. MP3에서 스크립트 추출 (Whisper 사용)
+            4. 참조 파일들을 마크다운으로 변환: {reference_files or []}
+            5. 스크립트와 참조 파일들을 통합하여 통합 컨텍스트 생성
+            6. 통합 컨텍스트 기반의 최종 보고서 생성 (유형: {report_type}, 길이: {length})
+            
+            각 단계가 완료되면 생성된 파일 경로를 반환하고 다음 단계로 진행하세요.
+            """
+        elif input_type == "mp4":
             instruction = f"""
             다음 단계에 따라 Video2Doc 워크플로우를 실행하세요:
             
@@ -786,7 +1061,7 @@ class Video2DocAgent:
             
             각 단계가 완료되면 생성된 파일 경로를 반환하고 다음 단계로 진행하세요.
             """
-        elif audio_file_type == "mp3":
+        elif input_type == "mp3":
             instruction = f"""
             다음 단계에 따라 Audio2Doc 워크플로우를 실행하세요:
             
@@ -800,15 +1075,15 @@ class Video2DocAgent:
             각 단계가 완료되면 생성된 파일 경로를 반환하고 다음 단계로 진행하세요.
             """
         else:
-            raise ValueError(f"지원하지 않는 오디오 파일 형식: {audio_file_type}. MP4 또는 MP3 파일만 지원됩니다.")
+            raise ValueError(f"지원하지 않는 입력 형식: {input_type}. MP4/MP3 파일 또는 유튜브 URL만 지원됩니다.")
         
         try:
             result = self.agent.run(instruction)
-            logger.info(f"Audio2Doc 워크플로우 완료 (입력: {audio_file_type.upper()})")
-            return {"result": str(result), "input_type": audio_file_type}
+            logger.info(f"워크플로우 완료 (입력 타입: {input_type.upper()})")
+            return {"result": str(result), "input_type": input_type}
             
         except Exception as e:
-            logger.error(f"Audio2Doc 워크플로우 실행 실패: {e}")
+            logger.error(f"워크플로우 실행 실패: {e}")
             raise
     
     def process_video_and_references(self, 
@@ -868,10 +1143,13 @@ def main():
             print(f"⚠️ 참조 파일 없음: {Path(ref_file).name}")
     
     try:
-        # 오디오 파일 타입 확인
-        audio_file_type = agent._get_audio_file_type(audio_path)
-        print(f"\n� 오디오 파일 타입: {audio_file_type.upper()}")
-        print(f"📁 오디오 파일: {Path(audio_path).name}")
+        # 입력 타입 확인 (로컬 파일 또는 유튜브 URL)
+        input_type = agent._get_input_type(audio_path)
+        print(f"\n🎯 입력 타입: {input_type.upper()}")
+        if input_type == "youtube":
+            print(f"🔗 유튜브 URL: {audio_path}")
+        else:
+            print(f"📁 파일: {Path(audio_path).name}")
         print(f"📄 참조 파일 수: {len(existing_files)}")
         print(f"📊 보고서 유형: summary (mid)")
         

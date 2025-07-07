@@ -3,11 +3,12 @@
 Video2Doc Agent 메인 실행 스크립트
 
 명령행 인터페이스를 통해 Video2Doc 에이전트를 실행할 수 있습니다.
-MP4 동영상 파일과 MP3 오디오 파일을 모두 지원합니다.
+MP4 동영상 파일, MP3 오디오 파일, 그리고 유튜브 URL을 모두 지원합니다.
 
 사용법:
     python main.py --audio video.mp4 --refs ref1.pdf ref2.pptx --type summary --length mid
     python main.py --audio meeting.mp3 --refs agenda.pdf --type summary --length short
+    python main.py --audio "https://www.youtube.com/watch?v=VIDEO_ID" --type summary --length mid
 """
 
 import argparse
@@ -16,7 +17,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from video2doc_agent import Video2DocAgent
+from video2doc_agent import Video2DocAgent, is_youtube_url
 from config import config
 
 
@@ -32,15 +33,24 @@ def setup_logging():
     )
 
 
-def validate_files(audio_path: str, reference_files: Optional[List[str]] = None) -> tuple:
-    """입력 파일들의 유효성을 검사합니다."""
+def validate_input(input_path: str, reference_files: Optional[List[str]] = None) -> tuple:
+    """입력 파일 또는 유튜브 URL의 유효성을 검사합니다."""
     
-    # 오디오 파일 검사
-    if not Path(audio_path).exists():
-        raise FileNotFoundError(f"오디오 파일을 찾을 수 없습니다: {audio_path}")
-    
-    if not config.is_supported_file(audio_path):
-        raise ValueError(f"지원하지 않는 오디오 파일 형식: {audio_path}")
+    # 유튜브 URL인지 확인
+    if is_youtube_url(input_path):
+        print(f"🔗 유튜브 URL 감지: {input_path}")
+        # 유튜브 URL의 경우 별도 검증 불필요 (다운로드 시점에서 검증)
+        input_validated = input_path
+    else:
+        # 로컬 파일 검사
+        if not Path(input_path).exists():
+            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {input_path}")
+        
+        if not config.is_supported_file(input_path):
+            raise ValueError(f"지원하지 않는 파일 형식: {input_path}")
+        
+        print(f"📁 로컬 파일 확인: {Path(input_path).name}")
+        input_validated = input_path
     
     # 참조 파일들 검사
     valid_reference_files = []
@@ -55,7 +65,7 @@ def validate_files(audio_path: str, reference_files: Optional[List[str]] = None)
             else:
                 print(f"⚠️ 파일을 찾을 수 없음, 건너뜀: {ref_file}")
     
-    return audio_path, valid_reference_files if valid_reference_files else None
+    return input_validated, valid_reference_files if valid_reference_files else None
 
 
 def main():
@@ -63,14 +73,18 @@ def main():
     
     # 명령행 인자 파싱
     parser = argparse.ArgumentParser(
-        description="Video2Doc Agent - 오디오(MP4/MP3)와 참조 자료로부터 문서 생성",
+        description="Video2Doc Agent - 오디오(MP4/MP3/유튜브)와 참조 자료로부터 문서 생성",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 사용 예시:
+    # 로컬 파일 처리
     python main.py --audio lecture.mp4 --type summary --length mid
     python main.py --audio meeting.mp3 --type summary --length short
     python main.py --audio presentation.mp4 --refs slides.pptx notes.pdf --type detailed --length long
-    python main.py --audio tutorial.mp4 --refs manual.pdf --model local_deepseek --output /path/to/output
+    
+    # 유튜브 URL 처리
+    python main.py --audio "https://www.youtube.com/watch?v=VIDEO_ID" --type summary --length mid
+    python main.py --audio "https://youtu.be/VIDEO_ID" --refs slides.pdf --type detailed --length long
         """
     )
     
@@ -78,7 +92,7 @@ def main():
     parser.add_argument(
         "--audio", "-a",
         required=True,
-        help="처리할 오디오 파일 경로 (MP4, MP3)"
+        help="처리할 오디오 파일 경로 (MP4, MP3) 또는 유튜브 URL"
     )
     
     # 하위 호환성을 위한 별칭
@@ -141,9 +155,9 @@ def main():
     logger = logging.getLogger(__name__)
     
     try:
-        # 파일 유효성 검사
-        logger.info("📋 입력 파일 검사 중...")
-        audio_path, reference_files = validate_files(audio_path, args.refs)
+        # 입력 유효성 검사 (로컬 파일 또는 유튜브 URL)
+        logger.info("📋 입력 검사 중...")
+        audio_path, reference_files = validate_input(audio_path, args.refs)
         
         # 출력 디렉토리 설정
         if args.output:

@@ -34,3 +34,6 @@ numpy>=1.24.0
 # Utilities
 # pathlib2>=2.3.0  # Not needed for Python 3.4+, use built-in pathlib
 requests>=2.31.0
+
+# YouTube video download
+yt-dlp>=2023.12.30
