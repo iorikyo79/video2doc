@@ -4,7 +4,11 @@ TDD Red 단계: 유튜브 유틸리티 분리를 위한 실패 테스트 작성
 """
 
 import pytest
+import sys
+from pathlib import Path
 
+# 상위 디렉토리를 Python path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def test_is_youtube_url_exists_in_module():
     """

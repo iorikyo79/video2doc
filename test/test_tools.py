@@ -5,6 +5,11 @@ core.tools 모듈로 @tool 데코레이터 함수들 분리를 위한 TDD 테스
 """
 
 import pytest
+import sys
+from pathlib import Path
+
+# 상위 디렉토리를 Python path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_youtube_download_tool_exists():

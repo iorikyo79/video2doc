@@ -18,7 +18,11 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from video2doc_agent import Video2DocAgent, is_youtube_url, Video2DocError, InvalidInputError
+# 새로운 모듈 구조에서 import
+from core.agent import Video2DocAgent
+from core.workflow import Video2DocWorkflow
+from utils.youtube import is_youtube_url
+from utils.exceptions import Video2DocError, InvalidInputError
 from config import config
 
 
@@ -179,7 +183,6 @@ def main():
         
         # 출력 디렉토리 설정
         if args.output:
-            from video2doc_agent import Video2DocWorkflow
             Video2DocWorkflow.output_dir = Path(args.output)
             Video2DocWorkflow.output_dir.mkdir(exist_ok=True)
         

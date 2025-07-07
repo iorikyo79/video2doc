@@ -13,18 +13,20 @@ Video2Doc 전체 워크플로우 테스트 스크립트
     python test_workflow.py
 """
 
+
+
+
 import os
 import sys
+from pathlib import Path
 import logging
 import traceback
-from pathlib import Path
 from datetime import datetime
 
-# 프로젝트 루트를 Python path에 추가
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+# 상위 디렉토리를 Python path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from video2doc_agent import Video2DocWorkflow
+from core.workflow import Video2DocWorkflow
 
 # 로깅 설정
 logging.basicConfig(
@@ -73,7 +75,7 @@ class WorkflowTester:
         issues = []
         
         # 1. 입력 파일 존재 확인
-        video_file = Path("input/sample.mp4")
+        video_file = Path("./input/sample.mp4")
         if not video_file.exists():
             issues.append(f"비디오 파일이 없습니다: {video_file}")
         else:
@@ -309,7 +311,7 @@ class WorkflowTester:
                 raise RuntimeError("사전 요구사항 확인 실패")
             
             # Step 1: MP3 추출
-            video_path = "input/S2_02.mp4"
+            video_path = "./input/sample.mp4"
             mp3_path = self.test_step_1_mp3_extraction(video_path)
             results['mp3_extraction'] = {'success': True, 'file': mp3_path}
             

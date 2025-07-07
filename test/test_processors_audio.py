@@ -1,8 +1,14 @@
 """
 AudioProcessor 모듈 분리를 위한 TDD 테스트
 """
-import pytest
+
+import sys
 from pathlib import Path
+from pathlib import Path
+import pytest
+
+# 상위 디렉토리를 Python path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_audio_processor_can_be_initialized():

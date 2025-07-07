@@ -3,13 +3,16 @@ TDD 기반 Utils 패키지 분리 테스트
 예외 클래스들을 utils.exceptions 모듈로 분리하기 위한 테스트
 """
 
+
+
+
 import pytest
 import sys
+from pathlib import Path
 import os
 
-# Add the current directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
+# 상위 디렉토리를 Python path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def test_video2doc_error_has_message_attribute():
     """

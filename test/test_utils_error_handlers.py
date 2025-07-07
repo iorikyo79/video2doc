@@ -3,7 +3,13 @@ Utils Error Handlers 모듈 테스트
 TDD Red 단계: 에러 핸들러 분리를 위한 실패 테스트 작성
 """
 
+
+import sys
+from pathlib import Path
 import pytest
+
+# 상위 디렉토리를 Python path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_get_youtube_error_suggestions_returns_list():

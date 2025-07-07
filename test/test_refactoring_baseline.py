@@ -10,8 +10,8 @@ import sys
 import os
 from pathlib import Path
 
-# Add the current directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the parent directory to Python path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def test_video2doc_agent_can_be_initialized():
     """
@@ -36,7 +36,7 @@ def test_youtube_url_detection_returns_boolean():
     Tests basic YouTube URL detection functionality as a boolean function.
     This ensures the function interface remains stable during refactoring.
     """
-    from video2doc_agent import is_youtube_url
+    from utils.youtube import is_youtube_url
     
     # Test with a simple YouTube URL
     result = is_youtube_url("https://youtube.com/watch?v=test")
@@ -58,7 +58,7 @@ def test_workflow_creates_output_directory():
     """
     import tempfile
     import shutil
-    from video2doc_agent import Video2DocWorkflow
+    from core.workflow import Video2DocWorkflow
     from pathlib import Path
     
     # Create a temporary directory for testing
@@ -72,3 +72,22 @@ def test_workflow_creates_output_directory():
         assert os.path.exists(output_path)
         assert os.path.isdir(output_path)
         assert workflow.output_dir == Path(output_path)
+
+
+if __name__ == "__main__":
+    try:
+        test_video2doc_agent_can_be_initialized()
+        print("✅ test_video2doc_agent_can_be_initialized PASSED")
+        
+        test_youtube_url_detection_returns_boolean()
+        print("✅ test_youtube_url_detection_returns_boolean PASSED")
+        
+        test_workflow_creates_output_directory()
+        print("✅ test_workflow_creates_output_directory PASSED")
+        
+        print("🎉 모든 기준선 테스트 통과!")
+        
+    except Exception as e:
+        print(f"❌ 기준선 테스트 실패: {e}")
+        import traceback
+        traceback.print_exc()
