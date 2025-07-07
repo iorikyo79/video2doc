@@ -73,7 +73,7 @@ class WorkflowTester:
         issues = []
         
         # 1. 입력 파일 존재 확인
-        video_file = Path("input/S2_02.mp4")
+        video_file = Path("input/sample.mp4")
         if not video_file.exists():
             issues.append(f"비디오 파일이 없습니다: {video_file}")
         else:

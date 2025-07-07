@@ -17,8 +17,8 @@ fi
 
 # 3. 입력 파일 확인
 echo "📋 입력 파일 확인..."
-if [ ! -f "input/S2_02.mp4" ]; then
-    echo "⚠️ 경고: input/S2_02.mp4 파일이 없습니다."
+if [ ! -f "input/sample.mp4" ]; then
+    echo "⚠️ 경고: input/sample.mp4 파일이 없습니다."
     echo "   테스트를 위해 이 위치에 MP4 파일을 배치해주세요."
 fi
 

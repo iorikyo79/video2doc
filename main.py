@@ -7,7 +7,8 @@ MP4 동영상 파일, MP3 오디오 파일, 그리고 유튜브 URL을 모두 �
 
 사용법:
     python main.py --audio video.mp4 --refs ref1.pdf ref2.pptx --type summary --length mid
-    python main.py --audio meeting.mp3 --refs agenda.pdf --type summary --length short
+    python main.py --audio input/sample.mp3 --refs agenda.pdf --type summary --length short
+    python main.py --audio input/sample.mp3 --type summary --length short
     python main.py --audio "https://www.youtube.com/watch?v=VIDEO_ID" --type summary --length mid
 """
 
