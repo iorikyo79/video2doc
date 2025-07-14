@@ -7,3 +7,4 @@
 *.pyc
 *.mp3
 *.log
+.env
