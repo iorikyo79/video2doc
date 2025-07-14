@@ -1,0 +1,16 @@
+# Video2Doc Frontend MVP Requirements
+
+# Core Streamlit framework
+streamlit>=1.28.0
+
+# File handling and utilities
+watchdog>=3.0.0  # For file monitoring
+requests>=2.31.0  # For HTTP requests (YouTube info)
+
+# Additional utilities that might be needed
+Pillow>=10.0.0  # For image handling in Streamlit
+pandas>=2.0.0   # Often used with Streamlit for data display
+
+# Note: Backend dependencies are imported from parent directory
+# Make sure the main Video2Doc requirements are installed:
+# pip install -r ../requirements.txt
